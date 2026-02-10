@@ -24,7 +24,11 @@ No changes are made to the controller StatefulSet (it does not use kubelet paths
 
 ## Quick Start
 
-### 1. Create the Namespace and Secret
+There are two deployment methods: **Kustomize** (recommended) or `deploy.sh`.
+
+### Option A: Deploy with Kustomize
+
+#### 1. Create the Namespace and Secret
 
 ```bash
 kubectl create namespace synology-csi
@@ -34,7 +38,97 @@ kubectl create secret generic client-info-secret \
   --from-file=client-info.yml=<path-to-your-client-info.yml>
 ```
 
-The `client-info.yml` file should look like:
+#### 2. Customize the StorageClass
+
+Edit `deploy/kubernetes/v1.25/storage-class.yml` to set parameters for your
+environment:
+
+```yaml
+parameters:
+  dsm: 10.0.0.100
+  location: /volume1
+  fsType: ext4              # Recommended: prevents fsGroup permission issues
+  clusterName: my-cluster   # Optional: tags LUN descriptions for multi-cluster
+```
+
+#### 3. Deploy
+
+```bash
+kubectl apply -k deploy/kubernetes/k0s/
+```
+
+Or preview the rendered manifests first:
+
+```bash
+kubectl kustomize deploy/kubernetes/k0s/
+```
+
+### Option B: Deploy with deploy.sh
+
+The `deploy.sh` script supports `--namespace` and `--kubelet-path` flags for
+k0s deployments:
+
+```bash
+./scripts/deploy.sh install \
+  --namespace synology-csi \
+  --kubelet-path /var/lib/k0s/kubelet
+```
+
+Or use environment variables:
+
+```bash
+export CSI_NAMESPACE=synology-csi
+export KUBELET_PATH=/var/lib/k0s/kubelet
+./scripts/deploy.sh install
+```
+
+Run `./scripts/deploy.sh help` for all available flags.
+
+### Verify
+
+```bash
+kubectl -n synology-csi get pods
+kubectl get csidriver csi.san.synology.com
+kubectl get storageclass
+```
+
+## Custom Namespace
+
+Both deployment methods support deploying into a namespace other than the
+default `synology-csi`.
+
+### Kustomize
+
+Uncomment the `namespace` line in `deploy/kubernetes/k0s/kustomization.yaml`:
+
+```yaml
+namespace: my-custom-csi-ns
+```
+
+This rewrites all namespace references in the rendered manifests. Then create
+the secret in your custom namespace before applying:
+
+```bash
+kubectl create namespace my-custom-csi-ns
+
+kubectl create secret generic client-info-secret \
+  --namespace my-custom-csi-ns \
+  --from-file=client-info.yml=<path-to-your-client-info.yml>
+
+kubectl apply -k deploy/kubernetes/k0s/
+```
+
+### deploy.sh
+
+```bash
+./scripts/deploy.sh install \
+  --namespace my-custom-csi-ns \
+  --kubelet-path /var/lib/k0s/kubelet
+```
+
+The script handles namespace creation and manifest rewriting automatically.
+
+## The `client-info.yml` File
 
 ```yaml
 clients:
@@ -47,46 +141,13 @@ clients:
     # clientsubnetoverride: "10.0.0.0/24"
 ```
 
-### 2. Customize the StorageClass
-
-Edit `deploy/kubernetes/v1.25/storage-class.yml` to set parameters for your
-environment:
-
-```yaml
-parameters:
-  dsm: '<nas-ip>'
-  location: '/volume1'
-  fsType: 'ext4'          # Recommended: prevents fsGroup permission issues
-  clusterName: 'my-cluster'  # Optional: tags LUN descriptions for multi-cluster
-```
-
-### 3. Deploy with Kustomize
-
-```bash
-kubectl apply -k deploy/kubernetes/k0s/
-```
-
-Or preview the rendered manifests first:
-
-```bash
-kubectl kustomize deploy/kubernetes/k0s/
-```
-
-### 4. Verify
-
-```bash
-kubectl -n synology-csi get pods
-kubectl get csidriver csi.san.synology.com
-kubectl get storageclass
-```
-
 ## Adapting for Other Distributions
 
 This overlay pattern can be adapted for any Kubernetes distribution that uses a
 non-standard kubelet root directory. To create an overlay for another
 distribution:
 
-1. Copy the `k0s/` directory to a new directory (e.g., `talos/`, `microk8s/`)
+1. Copy the `k0s/` directory to a new directory (e.g., `microk8s/`)
 2. Edit `node-kubelet-path-patch.yaml` and replace `/var/lib/k0s/kubelet` with
    the correct path for your distribution
 3. Update `kustomization.yaml` if needed
@@ -100,11 +161,17 @@ Common kubelet paths by distribution:
 | Talos | `/var/lib/kubelet` (standard) |
 | MicroK8s | `/var/snap/microk8s/common/var/lib/kubelet` |
 
+Alternatively, use `deploy.sh` with `--kubelet-path`:
+
+```bash
+./scripts/deploy.sh install --kubelet-path /var/snap/microk8s/common/var/lib/kubelet
+```
+
 ## Important Notes
 
 ### fsType Parameter
 
-The `fsType: 'ext4'` parameter in the StorageClass is **strongly recommended**.
+The `fsType: ext4` parameter in the StorageClass is **strongly recommended**.
 Without it, Kubernetes may skip `fsGroup` ownership changes on mounted volumes,
 causing permission errors for non-root workloads. The underlying filesystem is
 always ext4 regardless of this setting, but the metadata must be explicit for
