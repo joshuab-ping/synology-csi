@@ -285,3 +285,60 @@ To test: `REPO_OWNER=<usernamehere> goreleaser release --snapshot --clean`
 If you are no longer using the CSI driver, make sure that no other resources in your Kubernetes cluster are using storage managed by Synology CSI driver before uninstalling it.
 - `./scripts/uninstall.sh`
 
+## Fork-Specific Changes
+
+The following changes are specific to this fork and are not present in the
+upstream [xphyr/synology-csi](https://github.com/xphyr/synology-csi) repository.
+They can be removed if these features are upstreamed.
+
+### Kustomize Support
+
+Base and overlay Kustomize configurations have been added under
+`deploy/kubernetes/`:
+
+- **`v1.25/kustomization.yaml`** — Base kustomization that wraps the existing
+  v1.25 manifests (namespace, CSIDriver, controller, node, StorageClass) as
+  Kustomize resources.
+- **`k0s/`** — Overlay for [k0s](https://k0sproject.io/) clusters that patches
+  all kubelet paths from `/var/lib/kubelet` to `/var/lib/k0s/kubelet` via a
+  JSON 6902 patch on the node DaemonSet. See
+  [`deploy/kubernetes/k0s/README.md`](deploy/kubernetes/k0s/README.md) for
+  full deployment instructions.
+- The overlay includes an optional **namespace transformer** — uncomment the
+  `namespace:` field in `k0s/kustomization.yaml` to deploy into a custom
+  namespace without manually editing every manifest.
+
+### Configurable deploy.sh
+
+`scripts/deploy.sh` has been updated with two new flags:
+
+- **`--namespace` / `-n`** — Deploy into a namespace other than the default
+  `synology-csi`. Also available via the `CSI_NAMESPACE` environment variable.
+- **`--kubelet-path` / `-k`** — Override the kubelet root directory (default
+  `/var/lib/kubelet`). Also available via the `KUBELET_PATH` environment
+  variable.
+
+When a custom namespace is specified, the script automatically creates a
+temporary Kustomize overlay to rewrite namespace references in all manifests.
+
+### StorageClass Defaults
+
+- **`fsType: ext4`** is now enabled by default in `v1.25/storage-class.yml`.
+  Without an explicit `fsType`, Kubernetes skips `fsGroup` ownership changes
+  on iSCSI volumes (due to `fsGroupPolicy: ReadWriteOnceWithFSType`), causing
+  permission errors for non-root workloads.
+
+### ClusterRoleBinding Cleanup
+
+- Removed non-functional `metadata.namespace` fields from all
+  ClusterRoleBinding resources in the v1.25 manifests and snapshotter.
+  ClusterRoleBindings are cluster-scoped — the API server ignores
+  `metadata.namespace` on them, and Kustomize's namespace transformer does not
+  rewrite it, which left stale namespace references in rendered output when
+  deploying to a custom namespace.
+
+### YAML Quoting Consistency
+
+- StorageClass parameters that represent booleans (e.g. `"false"`, `"true"`)
+  are now consistently double-quoted to prevent YAML 1.1 parsers from
+  interpreting them as boolean values instead of strings.
