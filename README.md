@@ -289,7 +289,7 @@ If you are no longer using the CSI driver, make sure that no other resources in 
 
 The following changes are specific to this fork and are not present in the
 upstream [xphyr/synology-csi](https://github.com/xphyr/synology-csi) repository.
-They can be removed if these features are upstreamed.
+This notice can be removed if these features are upstreamed.
 
 ### Kustomize Support
 
