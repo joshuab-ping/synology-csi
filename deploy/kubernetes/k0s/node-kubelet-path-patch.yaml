@@ -1,0 +1,34 @@
+# JSON 6902 patch to replace /var/lib/kubelet paths with /var/lib/k0s/kubelet
+# for k0s clusters where the kubelet root directory is non-standard.
+#
+# Patches applied to the synology-csi-node DaemonSet:
+#   1. REGISTRATION_PATH env var in csi-driver-registrar container
+#   2. kubelet-dir volumeMount mountPath in csi-plugin container
+#   3. kubelet-dir hostPath volume
+#   4. plugin-dir hostPath volume
+#   5. registration-dir hostPath volume
+
+# 1. csi-driver-registrar container: REGISTRATION_PATH env var
+- op: replace
+  path: /spec/template/spec/containers/0/env/1/value
+  value: /var/lib/k0s/kubelet/plugins/csi.san.synology.com/csi.sock
+
+# 2. csi-plugin container: kubelet-dir volumeMount
+- op: replace
+  path: /spec/template/spec/containers/1/volumeMounts/0/mountPath
+  value: /var/lib/k0s/kubelet
+
+# 3. kubelet-dir volume: hostPath
+- op: replace
+  path: /spec/template/spec/volumes/0/hostPath/path
+  value: /var/lib/k0s/kubelet
+
+# 4. plugin-dir volume: hostPath
+- op: replace
+  path: /spec/template/spec/volumes/1/hostPath/path
+  value: /var/lib/k0s/kubelet/plugins/csi.san.synology.com/
+
+# 5. registration-dir volume: hostPath
+- op: replace
+  path: /spec/template/spec/volumes/2/hostPath/path
+  value: /var/lib/k0s/kubelet/plugins_registry
