@@ -11,7 +11,7 @@ require (
 	github.com/kubernetes-csi/csi-lib-utils v0.9.1
 	github.com/kubernetes-csi/csi-test/v4 v4.3.0
 	github.com/libp2p/go-netroute v0.2.2
-	github.com/sirupsen/logrus v1.7.0
+	github.com/sirupsen/logrus v1.8.3
 	github.com/spf13/cobra v1.1.3
 	golang.org/x/sys v0.33.0
 	google.golang.org/grpc v1.56.3
